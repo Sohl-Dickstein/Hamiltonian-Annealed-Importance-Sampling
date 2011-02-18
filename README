@@ -1,8 +1,12 @@
-Code to perform Hamiltonian Annealed Importance Sampling for partition function estimation, log likelihood estimation, and importance weight estimation in models with intractable partition functions.  Can also be used for Hamiltonian Monte Carlo sampling (single step, with partial momentum refreshment).
+Code to perform Hamiltonian Annealed Importance Sampling for partition
+function estimation, log likelihood estimation, and importance weight
+estimation in models with intractable partition functions.  Can also
+be used for Hamiltonian Monte Carlo sampling (single step, with
+partial momentum refreshment).
 
 See HAIS_examples.m for example usage.
 
-% See included PDF HAIS.pdf for a description of the Hamiltonian Annealed
-% Importance technique:
-%   J Sohl-Dickstein, BJ Culpepper. Hamiltonian annealed importance sampling 
-%   for partition function estimation. Redwood Technical Report. 2011.
+See included PDF HAIS.pdf for a description of the Hamiltonian
+Annealed Importance technique:
+   J Sohl-Dickstein, BJ Culpepper. Hamiltonian annealed importance sampling 
+   for partition function estimation. Redwood Technical Report. 2011.
