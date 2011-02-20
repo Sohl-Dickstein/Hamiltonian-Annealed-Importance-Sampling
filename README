@@ -5,7 +5,7 @@ also be used for Hamiltonian Monte Carlo sampling (single step, with
 partial momentum refreshment).
 
 HAIS_examples.m demonstrates the capabilities of this code in a 
-   variety of scenarios
+   variety of scenarios.
 HAIS.m performs Hamiltonian Annealed Importance Sampling.
 HAIS_logL.m calculates the log likelihood of a model given data using
    HAIS.
