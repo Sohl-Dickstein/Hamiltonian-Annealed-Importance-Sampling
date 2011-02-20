@@ -8,7 +8,7 @@
 %    - estimating the log likelihood of data X under a model p(x)
 %    - estimating the log likelihood of data X under a model p(x,a) with
 %      hidden units a
-%    - adding linear constraints to x
+%    - imposing linear constraints to x
 %    - numerically verifying the user supplied gradient dEdX
 %
 % See included PDF HAIS.pdf for a description of the Hamiltonian Annealed
