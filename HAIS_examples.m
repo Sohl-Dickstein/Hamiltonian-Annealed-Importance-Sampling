@@ -44,15 +44,6 @@ logZ_true = (d/2)*log(2*pi) - (1/2) * log(det(J));
 fprintf( '%d dimensional Gaussian, true log partition function %f, estimated log partition function %f\n', d, logZ_true, logZ_estimate );
 
 
-%% Estimate the partition function for a Gaussian again.  This time, the
-% energy and gradient functions are defined implicitly.
-fprintf( '\n\nEstimate the partition function for a Gaussian - implicitly defined energy and gradient functions\n' );
-HAIS_opts.E = @(X, J) 0.5 * sum( X.*(J*X), 1 ); % the energy function
-HAIS_opts.dEdX = @(X, J) J*X; % the gradient of the energy function with respect to X
-% estimate the log partition function via HAIS
-logZ_estimate = HAIS( HAIS_opts, J );
-fprintf( '%d dimensional Gaussian, true log partition function %f, estimated log partition function %f\n', d, logZ_true, logZ_estimate );
-
 
 %% Here we use the HAIS code as a Hamiltonian Monte Carlo sampler, and
 % sample from the distribution described by HAIS_opts.E and HAIS_opts.dEdX
@@ -107,7 +98,7 @@ X = randn( HAIS_opts.DataSize, 1000 ); % choose 1000 test data points randomly
 logL_estimate = HAIS_logL( HAIS_opts, X, J );
 % compare against true log likelihood
 logL_true = -mean(E_gauss( X, J )) - logZ_true;
-fprintf( '%d dimensional Gaussian, true average log likelihood %f, estimated average log likelihood %f\n', d, logL_true, logL_estimate );
+fprintf( '%d dimensional Gaussian, true average log likelihood %f nats, estimated average log likelihood %f nats\n', d, logL_true, logL_estimate );
 
 
 %% Here we demonstrate placing constraints on the parameters.  We calculate
@@ -159,7 +150,7 @@ Jmarginal = Jvisvis - Q'*Q;
 logL_true_sample = -(1/2)*sum( X.*(Jmarginal*X), 1) - (dvis/2)*log(2*pi) + (1/2)*log(det(Jmarginal));
 % the average log likelihood of the model given all the samples
 logL_true = mean(logL_true_sample);
-fprintf( 'Gaussian with %d visible and %d hidden units, true average log likelihood %f, estimated average log likelihood %f\n', dvis, dhid, logL_true, logL_estimate );
+fprintf( 'Gaussian with %d visible and %d hidden units, true average log likelihood %f nats, estimated average log likelihood %f nats\n', dvis, dhid, logL_true, logL_estimate );
 
 
 %% Here we show how HAIS.m can be used to numerically verify the gradient
