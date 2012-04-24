@@ -1,20 +1,20 @@
 function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
 % [logZ, logweights, X, P] = HAIS( HAIS_options, [addl parameters] )
 %
-% Performs Hamiltonian Annealed Importance Sampling, and returns an estimate
-% of the log partition function (logZ), and the log of the importance
-% weights (logweights), as well as the final state (X) and momentum (P) for
-% all the particles.  The file HAIS_examples.m demonstrates several usage
-% scenarios.  By default, a univariate Gaussian is used as the initial (easy
-% to sample from and normalize) distribuion.
+% Performs Hamiltonian Annealed Importance Sampling, and returns an
+% estimate of the log partition function (logZ), and the log of the
+% importance weights (logweights), as well as the final state (X) and
+% momentum (P) for all the particles.  The file HAIS_examples.m
+% demonstrates several usage scenarios.  By default, a univariate Gaussian
+% is used as the initial (easy to sample from and normalize) distribuion.
 %
 % HAIS_options is a structure containing all the settings for HAIS.  Sorted
 % roughly from most to least useful, the supported fields are:
-%   'DataSize': The number of data dimensions to use for AIS.
-%   'E': The energy function for the distribution of interest.  The function
+%   'DataSize': The number of data dimensions to use for AIS. 'E': The
+%   energy function for the distribution of interest.  The function
 %       E should take arguments E( X, [addl parameters] ), and return a
-%       vector containing the energy for each column of X.  X is a matrix of
-%       size [DataSize, BatchSize].
+%       vector containing the energy for each column of X.  X is a matrix
+%       of size [DataSize, BatchSize].
 %   'dEdX': The gradient of the energy function with respect to X.  The
 %       function dEdX should take arguments dEdX( X, [addl parameters] ),
 %       and return a matrix of the same size as X containing the derivative
@@ -25,16 +25,18 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
 %   'CheckGrad': Set to 1 to numerically check the gradient dEdX.
 %       (default: 0)
 %   'sample': Set to 1 to perform Hamiltonian Monte Carlo sampling of the
-%       distribution described by E.  Samples are returned in X.  If this is
-%       on, logZ and logweights will not be useful.  (The sampling method is
-%       a single leapfrog step followed by partial momentum refreshment -
-%       see Sections 5.2 and 5.3 of MCMC using Hamiltonian dynamics, R Neal,
-%       Handbook of Markov Chain Monte Carlo, 2010). (default: 0)
+%       distribution described by E.  Samples are returned in X.  If this
+%       is on, logZ and logweights will not be useful.  (The sampling
+%       method is a single leapfrog step followed by partial momentum
+%       refreshment - see Sections 5.2 and 5.3 of MCMC using Hamiltonian
+%       dynamics, R Neal, Handbook of Markov Chain Monte Carlo, 2010).
+%       (default: 0)
 %   'bounds': A matrix of size [DataSize, 2] containing lower and upper
-%       bounds on X.  If 2 finite bounds are given, the initial distribution
-%       will be uniform between the bounds.  If 1 finite bound is given, and
-%       the other is infinite, the initial distribution will be a one sided
-%       gaussian at the bound. (default: ones( DataSize, 1 ) * [-Inf, Inf])
+%       bounds on X.  If 2 finite bounds are given, the initial
+%       distribution will be uniform between the bounds.  If 1 finite bound
+%       is given, and the other is infinite, the initial distribution will
+%       be a one sided gaussian at the bound. (default: ones( DataSize, 1 )
+%       * [-Inf, Inf])
 %   'debug': Show debugging information and plots. 0: No display, 1: Print
 %       single summary line, 2: Print an indicator every intermediate
 %       distribution, 3: Display plots (default: 2)
@@ -46,21 +48,23 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
 %   'MixFrac': The mixing trajectory to use for interpolation between
 %       the initial distribution and the model distribution.  A matrix of
 %       size [N, 2], with the energy function at step n set to En =
-%       MixFrac(n,1)*initE( X ) + MixFrac(n,2)*E(X, [addl parameters]
-%       ). (default: [1-(0:N-1)'/(N-1), (0:N-1)'/(N-1)] )
+%       MixFrac(n,1)*initE( X ) + MixFrac(n,2)*E(X, [addl parameters] ).
+%       (default: [1-(0:N-1)'/(N-1), (0:N-1)'/(N-1)] )
 %   'X0': The initial data state used for HAIS.  Should be a draw from the
 %       n=0 distribution.  (default: randn( DataSize, BatchSize ) - but see
 %       section on 'bounds' above)
 %   'P0': The initial momentum used for HAIS.  (default: randn(
 %       DataSize, BatchSize ))
+%   'ReducedFlip': Use reduced momentum flips, for faster mixing. (see note
+%       at ******)
 %   'initE': Same format as 'E'.  Use this to set an alternative initial
 %       distribution.  If this is changed, the HAIS_options inset below
 %       should also be set.  (default: @E_HAIS_default)
 %           'initdEdX': Same format as 'dEdX', but for the initial
 %               distribution.  (default: @dEdX_HAIS_default)
 %           'initlogZ': It should take arguments initlogZ( DataSize,
-%               [addl parameters] ) and return the log partition function of
-%               the initial (easy to sample from) distribution over X.
+%               [addl parameters] ) and return the log partition function
+%               of the initial (easy to sample from) distribution over X.
 %               (default: @logZ_HAIS_default)
 %           'X0': Described above - should be set to samples from initE(
 %               X, [addl parameters] ).
@@ -68,8 +72,8 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
 %       energy function from a Gaussian to the distribution described by E(
 %       X, [addl parameters] ), theta is linearly interpolated from an
 %       initial value theta0 to a final value thetaN in the distribution
-%       described by E( X, theta, [addl parameters]).  If this is turned on,
-%       the HAIS_options inset below should also be set. (default: 0)
+%       described by E( X, theta, [addl parameters]).  If this is turned
+%       on, the HAIS_options inset below should also be set. (default: 0)
 %           'theta0': The initial (easy to sample from) setting for
 %               theta.  E( X, theta0, [addl parameters] ) should be easy to
 %               sample from.
@@ -86,13 +90,14 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
 %
 % See included PDF HAIS.pdf for a description of the Hamiltonian Annealed
 % Importance technique:
-%   J Sohl-Dickstein, BJ Culpepper. Hamiltonian annealed importance sampling 
-%   for partition function estimation. Redwood Technical Report. 2011.
+%   J Sohl-Dickstein, BJ Culpepper. Hamiltonian annealed importance
+%   sampling for partition function estimation. Redwood Technical Report.
+%   2011.
 %
 % This software is made available under the Creative Commons
 % Attribution-Noncommercial License.
-% (http://creativecommons.org/licenses/by-nc/3.0/)
-% Copyright 2011 Jascha Sohl-Dickstein, Jack Culpepper
+% (http://creativecommons.org/licenses/by-nc/3.0/) Copyright 2011 Jascha
+% Sohl-Dickstein, Jack Culpepper
     
     t_forward = tic();
 
@@ -110,8 +115,8 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
     logZ0 = getField( HAIS_opts, 'initlogZ', @logZ_HAIS_default );
     E0 = getField( HAIS_opts, 'initE', @E_HAIS_default );
     dE0dX = getField( HAIS_opts, 'initdEdX', @dEdX_HAIS_default );    
-    param_interp = getField( HAIS_opts, 'ParameterInterpolate', 0 );
-    interpType = getField( HAIS_opts, 'interpType', 'cos' );
+    % ** param_interp = getField( HAIS_opts, 'ParameterInterpolate', 0 );
+    ReducedFlip = getField( HAIS_opts, 'ReducedFlip', 0 );
     szb = getField( HAIS_opts, 'BatchSize', 100 );
     szd = getField( HAIS_opts, 'DataSize', -1 );
     if szd < 1
@@ -121,16 +126,13 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
         end
     end
     bounds = getField( HAIS_opts, 'Bounds', ones( szd, 1 ) * [-Inf, Inf] );
-    % collect indices where various combinations of upper and lower bounds apply
+    % collect indices where various combinations of upper and lower bounds
+    % apply
     upper_bounds_only = find( isfinite( bounds(:,2) ) & ~isfinite(bounds(:,1)) );
     lower_bounds_only = find( isfinite( bounds(:,1) ) & ~isfinite(bounds(:,2)) );
     both_bounds = find( isfinite( bounds(:,1) ) & isfinite(bounds(:,2)) );
     no_bounds = find( ~isfinite( bounds(:,1) ) & ~isfinite(bounds(:,2)) );
-    if param_interp
-        theta0 = getField( HAIS_opts, 'theta0', 0 );
-        thetaN = getField( HAIS_opts, 'thetaN', 0 );
-    end
-    Debug = getField( HAIS_opts, 'Debug', 2 );
+    Debug = getField( HAIS_opts, 'Debug', 1 );
     N = getField( HAIS_opts, 'N', 10000 );
     epsilon = getField( HAIS_opts, 'epsilon', 0.1 );
     %% set the default beta value so as to replace half (or a fraction dut) of the momentum power per unit time
@@ -139,7 +141,8 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
     beta = getField( HAIS_opts, 'beta', beta );
     % draw the initial state X0 from the initial distribution
     X0 = randn( szd, szb);
-    % if there are bounds on the state sapce, adjust the initial distribution as appropriate
+    % if there are bounds on the state sapce, adjust the initial
+    % distribution as appropriate
     X0( lower_bounds_only, : ) = bsxfun( @plus, abs(X0( lower_bounds_only, : )), bounds(lower_bounds_only, 1 ));
     X0( upper_bounds_only, : ) = bsxfun( @plus, -abs(X0( upper_bounds_only, : )), bounds(upper_bounds_only, 2 ));
     X0( both_bounds, : ) = bsxfun( @plus, bsxfun( @times, rand( length(both_bounds), szb ), bounds(both_bounds, 2 ) - bounds(both_bounds, 1 ) ), bounds(both_bounds, 1 ) );
@@ -157,7 +160,8 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
     mix_frac0_arr = mix_frac_joint_arr(:,1);
     mix_frac1_arr = mix_frac_joint_arr(:,2);
 
-    % put the bounds in a form to be more easily used for particle reflection
+    % put the bounds in a form to be more easily used for particle
+    % reflection
     lbounds_wide = bounds(:,1) * ones(1,szb);
     ubounds_wide = bounds(:,2) * ones(1,szb);    
     
@@ -193,51 +197,108 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
     logw = 0;
     mix_frac0 = 1; % = mix_frac0_arr(1);
     mix_frac1 = 0; % = mix_frac1_arr(1);
+    % number of times proposed updates were rejected, accepted, and rejected with momentum flip
     num_rej = 0;
-    num_tot = 0;
+    num_acc = 0;
+    num_flip = 0;
+    
     reweight = 0;
     if Debug > 2
+        % keep a record of the energy changes
         hist_dE = zeros(N,szb);
-        hist_reweight = zeros(N,szb);
     end
-    if param_interp
-        theta = mix_frac0*theta0 + mix_frac1*thetaN;
-        Em0 = EN(X, theta, varargin{:});
-        E0n = 0;
-        ENn = 0;
-    else
-        % the old and new energy function and gradients at this location
-        E0n = E0(X, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds );
-        ENn = EN(X, varargin{:});
-        % the contribution to w and its gradient
-        Em0 = mix_frac0*E0n + mix_frac1*ENn;
-    end        
+    
+    % the old and new energy function and gradients at this location
+    E0n = E0(X, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds );
+    ENn = EN(X, varargin{:});
+    % the contribution to w and its gradient
+    Em0 = mix_frac0*E0n + mix_frac1*ENn;
+
     for n = 2:N
         mix_frac0 = mix_frac0_arr(n);
         mix_frac1 = mix_frac1_arr(n);
-        if param_interp
-            theta = mix_frac0*theta0 + mix_frac1*thetaN;
-            Em1 = EN(X, theta, varargin{:});
-        else
-            Em1 = mix_frac0*E0n + mix_frac1*ENn;
-        end
+
+        Em1 = mix_frac0*E0n + mix_frac1*ENn;
         if Debug > 2
             hist_dE(n,:) =(-Em1 + Em0);
         end
-        % accumulate the contribution to the importance weights from this step
+        % accumulate the contribution to the importance weights from this
+        % step
         logw = logw - Em1 + Em0;
+        Em0 = Em1;
         
-        % corrupt the momentum variable for langevin dynamics
+        % corrupt the momentum variable
         noise = randn( szd, szb );
-        Pn  = -sqrt(1 - beta) * P + sqrt(beta) * noise;
-        P = Pn;
+        P  = sqrt(1 - beta) * P + sqrt(beta) * noise;
         
-        
-        % run the langevin dynamics step
-        P0 = P;
-        X0 = X;
-        E0n0 = E0n;
-        ENn0 = ENn;
+        [P1, X1] = langevin( P, X );
+        E0n1 = E0(X, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds );
+        ENn1 = EN(X, varargin{:});
+        E1 = mix_frac0*E0n1  + mix_frac1*ENn1;
+        % accept or reject the langevin step for each parameter
+        delta_E = 0.5*sum(P1.^2,1) - 0.5*sum(P.^2,1) + E1  - Em0;
+        p_acc = exp( -delta_E );
+        p_acc( p_acc > 1 ) = 1;
+        rnd_compare = rand( 1, szb );
+        % transitions we accept
+        gd = find(p_acc > rnd_compare);
+        P(:,gd) = P1(:,gd);
+        X(:,gd) = X1(:,gd);
+        Em0(gd) = E1(gd);
+        E0n(gd) = E0n1(gd);
+        ENn(gd) = ENn1(gd);
+        num_acc = num_acc + sum(gd);
+        if ~ReducedFlip
+            % negate the momentum of the rejected transformations
+            bd = find(p_acc <= rnd_compare);
+            P(:,bd) = -P(:,bd);
+            num_flip = num_flip + sum(bd);
+        else
+            % check whether or not we need to flip the momentum
+            
+        end        
+                    
+        if Debug > 1
+            fprintf('\rstep %d / %d', n, N);
+        end
+    end
+    fprintf('\n');
+
+    % the estimate for logZ - adds the log partition function for the
+    % initial distribution to the log importance weights
+    logZ = logZ0( szd, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds ) + logw + reweight;
+    
+    logweights = logZ;
+    % avoid numerical overflow - subtract a constant before exponentiating,
+    % and then add it again after logging
+    C = max(logZ);
+    logZ = log(sum( exp( logZ - C) )/szb) + C;
+    
+    t_forward = toc(t_forward);
+    if Debug > 0
+        fprintf( 'HAIS in %f sec, logZ %f, accept fraction %f (accept: %f flip: %f stationary: %f)', t_forward, logZ, num_acc / (num_acc + num_flip + num_rej), num_acc, num_flip, num_rej );
+        if Sample
+            fprintf( ' (Hamiltonian sampling only mode - set HAIS_opts.Sample=0 for importance sampling)' );
+        end
+        fprintf( '\n' );
+    end
+    if Debug > 2
+        sfigure(12);
+        clf;
+        plot( hist_dE );
+        title( 'weight contributions per sampling step' );
+        xlabel( 'sampling step' );
+
+        sfigure(13);
+        plot( [mix_frac0_arr,mix_frac1_arr] );
+        title( 'mix fraction per sampling step' );
+        xlabel( 'sampling step' );
+        legend( 'mix frac 0', 'mix frac 1' );
+        drawnow;    
+    end
+
+    % this function performs a single step of Langevin dynamics, and enforces bounds on state
+    function [X, P] = langevin( X, P )
         % half step in the position
         X = X + epsilon/2 * P;
         % enforce the bounds for the first half step
@@ -248,95 +309,25 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
         X(bd) = ubounds_wide(bd) + (ubounds_wide(bd) - X(bd));
         P(bd) = -P(bd);
         % full step in the momentum
-        if param_interp
-            dE = dENdX(X, theta, varargin{:});
-        else
-            dEm0dX = dE0dX(X, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds);
-            dEmNdX = dENdX(X, varargin{:});
-            dE = mix_frac0*dEm0dX + mix_frac1*dEmNdX;
-        end
+        dEm0dX = dE0dX(X, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds);
+        dEmNdX = dENdX(X, varargin{:});
+        dE = mix_frac0*dEm0dX + mix_frac1*dEmNdX;
         P = P - epsilon * dE;
         % half step in the position
         X = X + epsilon/2 * P;
-        % enforce the bounds for the second half step        
+        % enforce the bounds for the second half step
         bd = find( X < lbounds_wide );
         X(bd) = lbounds_wide(bd) + (lbounds_wide(bd) - X(bd));
         P(bd) = -P(bd);
         bd = find( X > ubounds_wide );
         X(bd) = ubounds_wide(bd) + (ubounds_wide(bd) - X(bd));
         P(bd) = -P(bd);
-
-        % negate the momentum
-        P = -P;
-
-        E_orig = Em1;
-        if param_interp
-            %E_orig = EN(X0, theta, varargin{:});
-            E_final = EN(X, theta, varargin{:});
-        else
-            %E_orig = mix_frac0*E0(X0, theta, varargin{:})  + mix_frac1*EN(X0, theta, varargin{:});
-            E0n = E0(X, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds );
-            ENn = EN(X, varargin{:});
-            %        keyboard
-            E_final = mix_frac0*E0n  + mix_frac1*ENn;
-        end
-        Em0 = E_final;
-
-        % accept or reject the langevin step for each parameter
-        delt_E = 0.5*sum(P.^2,1) + E_final - 0.5*sum(P0.^2,1) - E_orig;
-        p_acc = exp( -delt_E );
-        bd = p_acc < rand( 1, szb );
-        P(:,bd) = P0(:,bd);
-        X(:,bd) = X0(:,bd);
-        Em0(bd) = E_orig(bd);
-        E0n(bd) = E0n0(bd);
-        ENn(bd) = ENn0(bd);
-        num_rej = num_rej + sum(bd);
-        num_tot = num_tot + size(P,2);        
-            
-        if Debug > 1
-            fprintf('\rt %d / %d', n, N);
-        end
-    end
-    fprintf('\n');
-
-    % the estimate for logZ - adds the log partition function for the initial distribution to the log importance weights
-    if param_interp
-        logZ = logZ0( szd, theta0, varargin{:} ) + logw + reweight;
-    else
-        logZ = logZ0( szd, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds ) + logw + reweight;
-    end
-    
-    logweights = logZ;
-    % avoid numerical overflow - subtract a constant before exponentiating, and then add it again after logging
-    C = max(logZ);
-    logZ = log(sum( exp( logZ - C) )/szb) + C;
-    
-    t_forward = toc(t_forward);
-    if Debug > 0
-        fprintf( 'HAIS in %f sec, logZ %f, reject fraction %f', t_forward, logZ, num_rej / num_tot );
-        if Sample
-            fprintf( ' (Hamiltonian sampling only mode - set HAIS_opts.Sample=0 for importance sampling)' );
-        end
-        fprintf( '\n' );
-    end
-    if Debug > 2
-            sfigure(12);
-            clf;
-            plot( hist_dE );
-            title( 'weight contributions per sampling step' );
-            xlabel( 'sampling step' );
-
-        sfigure(13);
-        plot( [mix_frac0_arr,mix_frac1_arr] );
-        title( 'mix fraction per sampling step' );
-        xlabel( 'sampling step' );
-        legend( 'mix frac 0', 'mix frac 1' );
-        drawnow;    
-    end
-
-
-    % these functions describe the default initial (n=1) distribution - a univariate gaussian if there are no bounds, a one sided gaussian with sigma=1 if there is one of a lower or upper bound, but not both, and a uniform distribution between the lower and upper bounds if both are finite.
+    end    
+    % these functions describe the default initial (n=1) distribution - a
+    % univariate gaussian if there are no bounds, a one sided gaussian with
+    % sigma=1 if there is one of a lower or upper bound, but not both, and
+    % a uniform distribution between the lower and upper bounds if both are
+    % finite.
     function E = E_HAIS_default( X, varargin )
         [bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds] = varargin{end-4:end};
         E = 0;        

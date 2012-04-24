@@ -25,7 +25,7 @@
 %% Estimate the partition function for a Gaussian via HAIS.  The energy
 % function and gradient function for the Gaussian are provided in E_gauss.m
 % and dEdX_gauss.m.
-fprintf( '\n\nEstimate the partition function for a Gaussian - external energy and gradient functions\n' );
+fprintf( '\n\nEstimate the partition function for a Gaussian\n' );
 d = 20; % the number of dimensions
 % initialize parameter values randomly
 % J is the coupling (inverse covariance) matrix for the Gaussian.
