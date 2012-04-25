@@ -64,8 +64,8 @@ for N_ind = randperm( length(N_range) )
     end
     
     sfigure(1); clf;
-    sty = {'r.', 'g.', 'b.', 'c.', 'y.', 'k.' };
-    semilogx( [min(N_range), max(N_range)], [logL_true, logL_true], 'k-' );
+    sty = {'r.', 'g*', 'b+', 'co', 'y.', 'k.' };
+    semilogx( [min(N_range), max(N_range)], [logL_true, logL_true], 'k--' );
     hold on;
     for ii = 1:length(opts_array)
         semilogx( N_range, logL{ii}, sty{ii} );
