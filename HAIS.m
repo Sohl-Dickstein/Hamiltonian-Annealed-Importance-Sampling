@@ -117,7 +117,7 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
     E0 = getField( HAIS_opts, 'initE', @E_HAIS_default );
     dE0dX = getField( HAIS_opts, 'initdEdX', @dEdX_HAIS_default );    
     % ** param_interp = getField( HAIS_opts, 'ParameterInterpolate', 0 );
-    ReducedFlip = getField( HAIS_opts, 'ReducedFlip', 1 );
+    ReducedFlip = getField( HAIS_opts, 'ReducedFlip', 0 );
     szb = getField( HAIS_opts, 'BatchSize', 100 );
     szd = getField( HAIS_opts, 'DataSize', -1 );
     if szd < 1
@@ -198,7 +198,6 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
     num_acc = 0;
     num_flip = 0;
     
-    reweight = 0;
     if Debug > 2
         % keep a record of the energy changes
         hist_dE = zeros(N,szb);
@@ -241,29 +240,31 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
         ENn(gd) = ENn1(gd);
         num_acc = num_acc + length(gd);
         bd = find(p_leap <= rnd_compare);
-        if ~ReducedFlip
-            % negate the momentum of the rejected transformations
-            P(:,bd) = -P(:,bd);
-            num_flip = num_flip + length(bd);
-        else
-            % check whether or not we need to flip the momentum
-            [Xrev, Prev] = langevin( X(:,bd), -P(:,bd) );
-            E0nrev = E0(Xrev, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds );
-            ENnrev = EN(Xrev, varargin{:});
-            Erev = mix_frac0*E0nrev  + mix_frac1*ENnrev;
-            % accept or reject the langevin step for each parameter
-            delta_Erev = 0.5*sum(Prev.^2,1) - 0.5*sum(P(:,bd).^2,1) + Erev - Em1(bd);
-            p_leap_rev = exp( -delta_Erev );
-            p_leap_rev(p_leap_rev>1) = 1;
-            p_flip = p_leap_rev - p_leap(bd);
-            rnd_compare = rnd_compare(bd);
-            assert( sum( rnd_compare < p_leap(bd)) == 0 );
-            p_flip(p_flip < 0) = 0;
-            flip_inds = find( rnd_compare < (p_leap(bd) + p_flip) );
-            flip_inds = bd(flip_inds);
-            P(:,flip_inds) = -P(:,flip_inds);
-            num_flip = num_flip + length(flip_inds);
-            num_rej = num_rej + length(bd) - length(flip_inds);
+        if ~isempty(bd)
+            if ~ReducedFlip
+                % negate the momentum of the rejected transformations
+                P(:,bd) = -P(:,bd);
+                num_flip = num_flip + length(bd);
+            else
+                % check whether or not we need to flip the momentum
+                [Xrev, Prev] = langevin( X(:,bd), -P(:,bd) );
+                E0nrev = E0(Xrev, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds );
+                ENnrev = EN(Xrev, varargin{:});
+                Erev = mix_frac0*E0nrev  + mix_frac1*ENnrev;
+                % accept or reject the langevin step for each parameter
+                delta_Erev = 0.5*sum(Prev.^2,1) - 0.5*sum(P(:,bd).^2,1) + Erev - Em1(bd);
+                p_leap_rev = exp( -delta_Erev );
+                p_leap_rev(p_leap_rev>1) = 1;
+                p_flip = p_leap_rev - p_leap(bd);
+                rnd_compare = rnd_compare(bd);
+                assert( sum( rnd_compare < p_leap(bd)) == 0 );
+                p_flip(p_flip < 0) = 0;
+                flip_inds = find( rnd_compare < (p_leap(bd) + p_flip) );
+                flip_inds = bd(flip_inds);
+                P(:,flip_inds) = -P(:,flip_inds);
+                num_flip = num_flip + length(flip_inds);
+                num_rej = num_rej + length(bd) - length(flip_inds);
+            end
         end
         
         if Debug > 1
@@ -274,7 +275,7 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
 
     % the estimate for logZ - adds the log partition function for the
     % initial distribution to the log importance weights
-    logZ = logZ0( szd, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds ) + logw + reweight;
+    logZ = logZ0( szd, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds ) + logw;
     
     logweights = logZ;
     % avoid numerical overflow - subtract a constant before exponentiating,

@@ -4,10 +4,10 @@ addpath(genpath('..'))
 N_range = 10.^[1:0.05:6];
 N_range = round(10.^[1:0.1:5.5]);
 
-szd = 5; % number of dimensions
+szd = 10; % number of dimensions
 sze = szd; % number of experts -- same as number of dimensions for analytical log likelihood calculation
 szb_train = 1000; % number of training datapoints
-szb_hais = 100; % number of HAIS particles
+szb_hais = 10; % number of HAIS particles
 
 opts = [];
 opts.DataSize = szd; % the number of data dimensions
@@ -50,7 +50,7 @@ logL_true = -L_dL_studentt( theta, X );
 logL = {};
 logweights = {};
 for ii = 1:length(opts_array)
-    logL{ii} = zeros( 1, length(N_range) );
+    logL{ii} = NaN*zeros( 1, length(N_range) );
 end
 
 E = E_POE_studentt( X, theta );
