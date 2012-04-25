@@ -124,7 +124,7 @@ fprintf( '%d dimensional non-negative Gaussian, true log partition function %f, 
 % model.  See neglogp_gauss_hidden.m for the exact model form.)  Estimating
 % the log likelihood of a generative model involves estimating the log
 % likelihood of each test data point separately
-fprintf( '\n\nEstimate the log likelihood of a generative model (one with hidden units) - Gaussian prior over hidden units, gaussian conditional over X.  This involves separately calculating the log likelihood of all 5 test datapoints.\n' );
+fprintf( '\n\nEstimate the log likelihood of a generative model (one with hidden units) - Gaussian prior over hidden units, gaussian conditional over X.  This involves separately calculating the log likelihood of all 10 test datapoints.\n' );
 dvis = 10;
 dhid = 20; % the number of *hidden* variables
 % initialize parameter values randomly
@@ -138,7 +138,7 @@ HAIS_opts.N = 1000; % the number of intermediate distributions to use (for most 
 HAIS_opts.E = @neglogp_gauss_hidden;  % the negative log probability of the joint distribution over visible and hidden variables
 HAIS_opts.dEdX = @dneglogpdA_gauss_hidden; % the gradient of the energy function with respect to auxiliary units A
 % generate some random test data for the visible units
-X = randn( dvis, 5 );
+X = randn( dvis, 10 );
 % estimate the log likelihood
 [logL_estimate, logL_estimate_sample] = HAIS_logL_aux( HAIS_opts, X, Jvisvis, Jhidhid, Jvishid );
 % compare against true log likelihood - this involves calculating the

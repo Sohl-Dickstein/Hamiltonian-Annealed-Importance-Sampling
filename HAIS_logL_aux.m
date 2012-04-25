@@ -42,7 +42,7 @@ function [logL_avg, logL_all] = HAIS_logL_aux( HAIS_opts, X, varargin )
         if Debug > 0
             fprintf( 'Calculating log likelihood of sample %d / %d\n', i, nsamples );
         end
-        Xl = X(:,i) * ones( 1, szb );
+        Xl = X(:,i);
         logL_all(i) = HAIS( HAIS_opts, Xl, varargin{:} );
     end
     logL_avg = mean( logL_all );

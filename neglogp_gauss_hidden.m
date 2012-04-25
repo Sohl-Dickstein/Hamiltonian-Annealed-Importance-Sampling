@@ -8,7 +8,7 @@ function neglogp = neglogp_gauss_hidden( A, X, Jvisvis, Jhidhid, Jvishid  )
     Za = (sqrt(2*pi)^nhid * det(Jhidhid)^(-1/2));
     logpa = -Ea - log(Za); % the gaussian prior over a, p(a)
 
-    Xdiff = X - Jvishid * A;
+    Xdiff = bsxfun( @plus, X,  - Jvishid * A );
     Ex_a = (1/2)*sum(Xdiff.*(Jvisvis*Xdiff));
     Zx_a = (sqrt(2*pi)^nvis * det(Jvisvis)^(-1/2));
     logpx_a = -Ex_a - log(Zx_a); % the gaussian conditional over x, p(x|a)

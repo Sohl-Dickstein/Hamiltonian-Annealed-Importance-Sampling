@@ -56,7 +56,8 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
 %   'P0': The initial momentum used for HAIS.  (default: randn(
 %       DataSize, BatchSize ))
 %   'ReducedFlip': Use reduced momentum flips, for faster mixing. (see note
-%       at ******)
+%       "Hamiltonian Monte Carlo with Fewer Momentum Reversals" available at
+%       http://redwood.berkeley.edu/jascha )
 %   'initE': Same format as 'E'.  Use this to set an alternative initial
 %       distribution.  If this is changed, the HAIS_options inset below
 %       should also be set.  (default: @E_HAIS_default)
@@ -116,7 +117,7 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
     E0 = getField( HAIS_opts, 'initE', @E_HAIS_default );
     dE0dX = getField( HAIS_opts, 'initdEdX', @dEdX_HAIS_default );    
     % ** param_interp = getField( HAIS_opts, 'ParameterInterpolate', 0 );
-    ReducedFlip = getField( HAIS_opts, 'ReducedFlip', 0 );
+    ReducedFlip = getField( HAIS_opts, 'ReducedFlip', 1 );
     szb = getField( HAIS_opts, 'BatchSize', 100 );
     szd = getField( HAIS_opts, 'DataSize', -1 );
     if szd < 1
@@ -159,11 +160,6 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
     end
     mix_frac0_arr = mix_frac_joint_arr(:,1);
     mix_frac1_arr = mix_frac_joint_arr(:,2);
-
-    % put the bounds in a form to be more easily used for particle
-    % reflection
-    lbounds_wide = bounds(:,1) * ones(1,szb);
-    ubounds_wide = bounds(:,2) * ones(1,szb);    
     
     % initialize X and P.  X is state, P is momentum.
     X = X0;
@@ -234,26 +230,42 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
         E1 = mix_frac0*E0n1  + mix_frac1*ENn1;
         % accept or reject the langevin step for each parameter
         delta_E = 0.5*sum(P1.^2,1) - 0.5*sum(P.^2,1) + E1  - Em1;
-        p_acc = exp( -delta_E );
-        p_acc( p_acc > 1 ) = 1;
+        p_leap = exp( -delta_E );
+        p_leap( p_leap > 1 ) = 1;
         rnd_compare = rand( 1, szb );
         % transitions we accept
-        gd = find(p_acc > rnd_compare);
+        gd = find(p_leap > rnd_compare);
         P(:,gd) = P1(:,gd);
         X(:,gd) = X1(:,gd);
         E0n(gd) = E0n1(gd);
         ENn(gd) = ENn1(gd);
-        num_acc = num_acc + sum(gd);
+        num_acc = num_acc + length(gd);
+        bd = find(p_leap <= rnd_compare);
         if ~ReducedFlip
             % negate the momentum of the rejected transformations
-            bd = find(p_acc <= rnd_compare);
             P(:,bd) = -P(:,bd);
-            num_flip = num_flip + sum(bd);
+            num_flip = num_flip + length(bd);
         else
             % check whether or not we need to flip the momentum
-            
-        end        
-                    
+            [Xrev, Prev] = langevin( X(:,bd), P(:,bd) );
+            E0nrev = E0(Xrev, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds );
+            ENnrev = EN(Xrev, varargin{:});
+            Erev = mix_frac0*E0nrev  + mix_frac1*ENnrev;
+            % accept or reject the langevin step for each parameter
+            delta_Erev = 0.5*sum(Prev.^2,1) - 0.5*sum(P(:,bd).^2,1) + Erev - Em1(bd);
+            p_leap_rev = exp( -delta_Erev );
+            p_leap_rev(p_leap_rev>1) = 1;
+            p_flip = p_leap_rev - p_leap(bd);
+            rnd_compare = rnd_compare(bd);
+            assert( sum( rnd_compare < p_leap(bd)) == 0 );
+            p_flip(p_flip < 0) = 0;
+            flip_inds = find( rnd_compare < p_leap(bd) + p_flip );
+            flip_inds = bd(flip_inds);
+            P(:,flip_inds) = -P(:,flip_inds);
+            num_flip = num_flip + length(flip_inds);
+            num_rej = num_flip + length(bd) - length(flip_inds);
+        end
+        
         if Debug > 1
             fprintf('\rstep %d / %d', n, N);
         end
@@ -272,7 +284,7 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
     
     t_forward = toc(t_forward);
     if Debug > 0
-        fprintf( 'HAIS in %f sec, logZ %f, sample accept fraction %f (accept: %f flip: %f stationary: %f)', t_forward, logZ, num_acc / (num_acc + num_flip + num_rej), num_acc, num_flip, num_rej );
+        fprintf( 'HAIS in %f sec, logZ %f, sample accept fraction %f (accept: %d flip: %d stationary: %d)', t_forward, logZ, num_acc / (num_acc + num_flip + num_rej), num_acc, num_flip, num_rej );
         if Sample
             fprintf( '\n (Hamiltonian sampling only mode - set HAIS_opts.Sample=0 for importance sampling)' );
         end
@@ -295,15 +307,20 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
 
     % this function performs a single step of Langevin dynamics, and enforces bounds on state
     function [X, P] = langevin( X, P )
+        % put the bounds in a form to be more easily used for particle
+        % reflection
+        lbounds_wide = bounds(:,1) * ones(1,size(X,2));
+        ubounds_wide = bounds(:,2) * ones(1,size(X,2));
+        
         % half step in the position
         X = X + epsilon/2 * P;
         % enforce the bounds for the first half step
-        bd = find( X < lbounds_wide );
-        X(bd) = lbounds_wide(bd) + (lbounds_wide(bd) - X(bd));
-        P(bd) = -P(bd);
-        bd = find( X > ubounds_wide );
-        X(bd) = ubounds_wide(bd) + (ubounds_wide(bd) - X(bd));
-        P(bd) = -P(bd);
+        bv = find( X < lbounds_wide );
+        X(bv) = lbounds_wide(bv) + (lbounds_wide(bv) - X(bv));
+        P(bv) = -P(bv);
+        bv = find( X > ubounds_wide );
+        X(bv) = ubounds_wide(bv) + (ubounds_wide(bv) - X(bv));
+        P(bv) = -P(bv);
         % full step in the momentum
         dEm0dX = dE0dX(X, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds);
         dEmNdX = dENdX(X, varargin{:});
@@ -312,12 +329,12 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
         % half step in the position
         X = X + epsilon/2 * P;
         % enforce the bounds for the second half step
-        bd = find( X < lbounds_wide );
-        X(bd) = lbounds_wide(bd) + (lbounds_wide(bd) - X(bd));
-        P(bd) = -P(bd);
-        bd = find( X > ubounds_wide );
-        X(bd) = ubounds_wide(bd) + (ubounds_wide(bd) - X(bd));
-        P(bd) = -P(bd);
+        bv = find( X < lbounds_wide );
+        X(bv) = lbounds_wide(bv) + (lbounds_wide(bv) - X(bv));
+        P(bv) = -P(bv);
+        bv = find( X > ubounds_wide );
+        X(bv) = ubounds_wide(bv) + (ubounds_wide(bv) - X(bv));
+        P(bv) = -P(bv);
     end    
     % these functions describe the default initial (n=1) distribution - a
     % univariate gaussian if there are no bounds, a one sided gaussian with
