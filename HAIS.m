@@ -135,7 +135,7 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
     no_bounds = find( ~isfinite( bounds(:,1) ) & ~isfinite(bounds(:,2)) );
     Debug = getField( HAIS_opts, 'Debug', 1 );
     N = getField( HAIS_opts, 'N', 10000 );
-    epsilon = getField( HAIS_opts, 'epsilon', 0.1 );
+    epsilon = getField( HAIS_opts, 'epsilon', 0.1 ); % ****
     %% set the default beta value so as to replace half (or a fraction dut) of the momentum power per unit time
     dut = 0.5;
     beta = 1 - exp( log( dut ) * epsilon );
@@ -247,7 +247,7 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
             num_flip = num_flip + length(bd);
         else
             % check whether or not we need to flip the momentum
-            [Xrev, Prev] = langevin( X(:,bd), P(:,bd) );
+            [Xrev, Prev] = langevin( X(:,bd), -P(:,bd) );
             E0nrev = E0(Xrev, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds );
             ENnrev = EN(Xrev, varargin{:});
             Erev = mix_frac0*E0nrev  + mix_frac1*ENnrev;
@@ -259,11 +259,11 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
             rnd_compare = rnd_compare(bd);
             assert( sum( rnd_compare < p_leap(bd)) == 0 );
             p_flip(p_flip < 0) = 0;
-            flip_inds = find( rnd_compare < p_leap(bd) + p_flip );
+            flip_inds = find( rnd_compare < (p_leap(bd) + p_flip) );
             flip_inds = bd(flip_inds);
             P(:,flip_inds) = -P(:,flip_inds);
             num_flip = num_flip + length(flip_inds);
-            num_rej = num_flip + length(bd) - length(flip_inds);
+            num_rej = num_rej + length(bd) - length(flip_inds);
         end
         
         if Debug > 1
