@@ -33,7 +33,7 @@ J = randn(d)/sqrt(d); J = J*J' + 0.1*eye(d);
 % initialize options for HAIS
 HAIS_opts = [];
 HAIS_opts.DataSize = d; % the number of data dimensions
-HAIS_opts.N = 100; % the number of intermediate distributions to use (for most real applications, you will want 1E4 to 1E6 for this parameter)
+HAIS_opts.N = 1000; % the number of intermediate distributions to use (for most real applications, you will want 1E4 to 1E6 for this parameter)
 HAIS_opts.E = @E_gauss; % the energy function
 HAIS_opts.dEdX = @dEdX_gauss; % the gradient of the energy function with
 % respect to X estimate the log partition function of the distribution
@@ -134,7 +134,7 @@ Jvishid = randn(dvis, dhid)/sqrt(dvis+dhid); % visible to hidden  coupling
 % initialize HAIS parameters
 HAIS_opts = [];
 HAIS_opts.DataSize = dhid; % the number of auxiliary data dimensions
-HAIS_opts.N = 100; % the number of intermediate distributions to use (for most real applications, you will want 1E4 to 1E6 for this parameter)
+HAIS_opts.N = 1000; % the number of intermediate distributions to use (for most real applications, you will want 1E4 to 1E6 for this parameter)
 HAIS_opts.E = @neglogp_gauss_hidden;  % the negative log probability of the joint distribution over visible and hidden variables
 HAIS_opts.dEdX = @dneglogpdA_gauss_hidden; % the gradient of the energy function with respect to auxiliary units A
 % generate some random test data for the visible units

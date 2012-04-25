@@ -211,13 +211,11 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
     % the old and new energy function and gradients at this location
     E0n = E0(X, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds );
     ENn = EN(X, varargin{:});
-    % the contribution to w and its gradient
-    Em0 = mix_frac0*E0n + mix_frac1*ENn;
 
     for n = 2:N
+        Em0 = mix_frac0*E0n + mix_frac1*ENn;
         mix_frac0 = mix_frac0_arr(n);
         mix_frac1 = mix_frac1_arr(n);
-
         Em1 = mix_frac0*E0n + mix_frac1*ENn;
         if Debug > 2
             hist_dE(n,:) =(-Em1 + Em0);
@@ -225,18 +223,17 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
         % accumulate the contribution to the importance weights from this
         % step
         logw = logw - Em1 + Em0;
-        Em0 = Em1;
         
         % corrupt the momentum variable
         noise = randn( szd, szb );
         P  = sqrt(1 - beta) * P + sqrt(beta) * noise;
         
-        [P1, X1] = langevin( P, X );
-        E0n1 = E0(X, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds );
-        ENn1 = EN(X, varargin{:});
+        [X1, P1] = langevin( X, P );
+        E0n1 = E0(X1, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds );
+        ENn1 = EN(X1, varargin{:});
         E1 = mix_frac0*E0n1  + mix_frac1*ENn1;
         % accept or reject the langevin step for each parameter
-        delta_E = 0.5*sum(P1.^2,1) - 0.5*sum(P.^2,1) + E1  - Em0;
+        delta_E = 0.5*sum(P1.^2,1) - 0.5*sum(P.^2,1) + E1  - Em1;
         p_acc = exp( -delta_E );
         p_acc( p_acc > 1 ) = 1;
         rnd_compare = rand( 1, szb );
@@ -244,7 +241,6 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
         gd = find(p_acc > rnd_compare);
         P(:,gd) = P1(:,gd);
         X(:,gd) = X1(:,gd);
-        Em0(gd) = E1(gd);
         E0n(gd) = E0n1(gd);
         ENn(gd) = ENn1(gd);
         num_acc = num_acc + sum(gd);
@@ -276,9 +272,9 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
     
     t_forward = toc(t_forward);
     if Debug > 0
-        fprintf( 'HAIS in %f sec, logZ %f, accept fraction %f (accept: %f flip: %f stationary: %f)', t_forward, logZ, num_acc / (num_acc + num_flip + num_rej), num_acc, num_flip, num_rej );
+        fprintf( 'HAIS in %f sec, logZ %f, sample accept fraction %f (accept: %f flip: %f stationary: %f)', t_forward, logZ, num_acc / (num_acc + num_flip + num_rej), num_acc, num_flip, num_rej );
         if Sample
-            fprintf( ' (Hamiltonian sampling only mode - set HAIS_opts.Sample=0 for importance sampling)' );
+            fprintf( '\n (Hamiltonian sampling only mode - set HAIS_opts.Sample=0 for importance sampling)' );
         end
         fprintf( '\n' );
     end
