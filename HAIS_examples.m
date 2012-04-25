@@ -36,7 +36,8 @@ HAIS_opts.DataSize = d; % the number of data dimensions
 HAIS_opts.N = 1000; % the number of intermediate distributions to use (for most real applications, you will want 1E4 to 1E6 for this parameter)
 HAIS_opts.E = @E_gauss; % the energy function
 HAIS_opts.dEdX = @dEdX_gauss; % the gradient of the energy function with
-% respect to X estimate the log partition function of the distribution
+                              % respect to X
+% estimate the log partition function of the distribution
 % described by HAIS_opts.E with parameters J via HAIS
 logZ_estimate = HAIS( HAIS_opts, J );
 % calculate the true partition function for the Gaussian
