@@ -118,6 +118,9 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
     dE0dX = getField( HAIS_opts, 'initdEdX', @dEdX_HAIS_default );    
     % ** param_interp = getField( HAIS_opts, 'ParameterInterpolate', 0 );
     ReducedFlip = getField( HAIS_opts, 'ReducedFlip', 0 );
+    MomentumRedraw = getField( HAIS_opts, 'MomentumRedraw ', 0 );
+    quasi_static = getField( HAIS_opts, 'QuasiStatic', 0 );
+    energy_step = getField( HAIS_opts, 'EnergyStep', 0.001 );
     szb = getField( HAIS_opts, 'BatchSize', 100 );
     szd = getField( HAIS_opts, 'DataSize', -1 );
     if szd < 1
@@ -203,15 +206,37 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
         hist_dE = zeros(N,szb);
     end
     
-    % the old and new energy function and gradients at this location
+    % the old and new energy function at this location
     E0n = E0(X, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds );
     ENn = EN(X, varargin{:});
 
     for n = 2:N
         Em0 = mix_frac0*E0n + mix_frac1*ENn;
-        mix_frac0 = mix_frac0_arr(n);
-        mix_frac1 = mix_frac1_arr(n);
+        if quasi_static == 0
+            mix_frac0 = mix_frac0_arr(n);
+            mix_frac1 = mix_frac1_arr(n);
+        elseif quasi_static == 1
+            % make a step with the target scale for the change in energy
+            E_mag = mean( abs(ENn - E0n) );
+            mix_frac_step = energy_step / E_mag;
+            mix_frac0 = mix_frac0 - mix_frac_step;
+            % enforce a maximum of N steps -- if falling behind, force to keep up
+            mix_frac0 = min( [mix_frac0, mix_frac0_arr(n)] );
+            mix_frac0 = max( [mix_frac0, 0] );            
+            mix_frac1 = 1 - mix_frac0;
+        elseif quasi_static == 2
+            % ENn is the energy of the current particle locations under the final distribution, and E0n is the energy of the current particle locations under the initial distribution
+            % make a step with the target scale for the change in energy
+            E_mag = std(ENn - E0n);
+            mix_frac_step = energy_step / E_mag;
+            mix_frac0 = mix_frac0 - mix_frac_step;
+            % enforce a maximum of N steps -- if falling behind, force to keep up
+            mix_frac0 = min( [mix_frac0, mix_frac0_arr(n)] );
+            mix_frac0 = max( [mix_frac0, 0] );            
+            mix_frac1 = 1 - mix_frac0;
+        end
         Em1 = mix_frac0*E0n + mix_frac1*ENn;
+        
         if Debug > 2
             hist_dE(n,:) =(-Em1 + Em0);
         end
@@ -219,9 +244,17 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
         % step
         logw = logw - Em1 + Em0;
         
+        if mix_frac0 == 0
+            break;
+        end
+        
         % corrupt the momentum variable
         noise = randn( szd, szb );
         P  = sqrt(1 - beta) * P + sqrt(beta) * noise;
+        if MomentumRedraw 
+            P = bsxfun( @times, P, 1 ./ sqrt(sum(P.^2, 1)) );
+            P = bsxfun( @times, P, sqrt(sum(randn(size(P)).^2, 1)) );
+        end
         
         [X1, P1] = langevin( X, P );
         E0n1 = E0(X1, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds );

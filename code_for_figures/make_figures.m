@@ -2,12 +2,16 @@ addpath(genpath('..'))
 
 % the number of intermediate distributions to use
 N_range = 10.^[1:0.05:6];
-N_range = round(10.^[1:0.1:5.5]);
+N_range = round(10.^[1:0.01:4.5]);
+%N_range = round(10.^[1:0.01:3.5]);
+%N_range = round(10.^[1:0.01:3]);
 
-szd = 10; % number of dimensions
+fig_num = ceil( rand() * 1e6 );
+
+szd = 100; % number of dimensions
 sze = szd; % number of experts -- same as number of dimensions for analytical log likelihood calculation
 szb_train = 1000; % number of training datapoints
-szb_hais = 10; % number of HAIS particles
+szb_hais = 1000; % number of HAIS particles
 
 opts = [];
 opts.DataSize = szd; % the number of data dimensions
@@ -16,19 +20,46 @@ opts.epsilon = .5;
 opts.E = @E_POE_studentt; % the energy function
 opts.dEdX = @dEdX_POE_studentt; % the gradient of the energy function with
 opts_array = {};
-ii = 1;
+ii = 0;
+ii = ii+1;
 opts_array{ii} = opts;
 opts_array{ii}.description = 'HAIS - \gamma=1';
 opts_array{ii}.ReducedFlip = 0;
+opts_array{ii}.QuasiStatic = 0;
 opts_array{ii}.beta = 1;
 ii = ii+1;
 opts_array{ii} = opts;
 opts_array{ii}.description = 'HAIS';
 opts_array{ii}.ReducedFlip = 0;
+opts_array{ii}.QuasiStatic = 0;
+% ii = ii+1;
+% opts_array{ii} = opts;
+% opts_array{ii}.description = 'HAIS - QS abs';
+% opts_array{ii}.ReducedFlip = 0;
+% opts_array{ii}.QuasiStatic = 1;
 ii = ii+1;
 opts_array{ii} = opts;
-opts_array{ii}.description = 'HAIS - Reduced Flip';
-opts_array{ii}.ReducedFlip = 1;
+opts_array{ii}.description = 'HAIS QS';
+opts_array{ii}.ReducedFlip = 0;
+opts_array{ii}.QuasiStatic = 2;
+% ii = ii+1;
+% opts_array{ii} = opts;
+% opts_array{ii}.description = 'HAIS MR';
+% opts_array{ii}.ReducedFlip = 0;
+% opts_array{ii}.QuasiStatic = 0;
+% opts_array{ii}.MomentumRedraw = 1;
+% ii = ii+1;
+% opts_array{ii} = opts;
+% opts_array{ii}.description = 'HAIS QS MR';
+% opts_array{ii}.ReducedFlip = 0;
+% opts_array{ii}.QuasiStatic = 2;
+% opts_array{ii}.MomentumRedraw = 1;
+% ii = ii+1;
+% opts_array{ii} = opts;
+% opts_array{ii}.description = 'HAIS QS MR RF';
+% opts_array{ii}.ReducedFlip = 1;
+% opts_array{ii}.QuasiStatic = 2;
+% opts_array{ii}.MomentumRedraw = 1;
 
 % gether the descriptions into a more convenient datatype
 descs = {};
@@ -48,30 +79,47 @@ theta = [eye( sze ), log( ones(sze,1) )];
 logL_true = -L_dL_studentt( theta, X );
 
 logL = {};
+t_est = {};
 logweights = {};
 for ii = 1:length(opts_array)
     logL{ii} = NaN*zeros( 1, length(N_range) );
+    t_est{ii} = zeros( 1, length(N_range) );
 end
 
+max_t = 0;
+min_t = 9999999999999;
 E = E_POE_studentt( X, theta );
 for N_ind = randperm( length(N_range) )
     N = N_range(N_ind);
     for ii = 1:length(opts_array)
         opts_array{ii}.N = N;
+        opts_array{ii}.EnergyStep = 10/N;
+        if opts_array{ii}.QuasiStatic
+            opts_array{ii}.N = 100*N;
+        end
+        t_start = tic();
         [logZ_l, logweights_l, X_l, P_l] = HAIS( opts_array{ii}, theta );
+        t_est{ii}(N_ind) = toc( t_start );
         logL_l = -E - logZ_l;
         logL{ii}(N_ind) = mean(logL_l);
     end
+    for ii = 1:length(opts_array)
+        max_t = max( [max_t, t_est{ii}(N_ind)] );
+        min_t = min( [min_t, t_est{ii}(N_ind)] );
+    end
+
     
-    sfigure(1); clf;
+    sfigure(fig_num); clf;
     sty = {'r.', 'g*', 'b+', 'co', 'y.', 'k.' };
-    semilogx( [min(N_range), max(N_range)], [logL_true, logL_true], 'k--' );
+    semilogx( [min_t, max_t], [logL_true, logL_true], 'k--' );
     hold on;
     for ii = 1:length(opts_array)
-        semilogx( N_range, logL{ii}, sty{ii} );
+        semilogx( t_est{ii}, logL{ii}, sty{ii} );
     end
     legend( {'True value', descs{:}} );
-    title( 'Estimated log likelihood vs. number of intermediate distributions' );   
+    title( 'Estimated log likelihood vs. number of intermediate distributions' );  
+    ylabel( 'Log likelihood (nats)' );
+    xlabel( 'Computation time (s)' );
     drawnow;
 end
 
@@ -143,7 +191,7 @@ for i = 1:length(N_range)
         title( 'log weights' );
     end
 
-    sfigure(20);
+    sfigure(fig_num);
     semilogx(N_range(1:i), loglike_ais_mean(1:i), '.' );
     hold on;
     semilogx(N_range(1:i), loglike_ais_b1_mean(1:i), 'g.' );
