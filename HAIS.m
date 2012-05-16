@@ -120,6 +120,7 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
     ReducedFlip = getField( HAIS_opts, 'ReducedFlip', 0 );
     MomentumRedraw = getField( HAIS_opts, 'MomentumRedraw ', 0 );
     quasi_static = getField( HAIS_opts, 'QuasiStatic', 0 );
+    SampleMeta = getField( HAIS_opts, 'SampleMeta', 0 );
     energy_step = getField( HAIS_opts, 'EnergyStep', 0.001 );
     szb = getField( HAIS_opts, 'BatchSize', 100 );
     szd = getField( HAIS_opts, 'DataSize', -1 );
@@ -155,14 +156,31 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
     szd = size( X0, 1 ); % number of data dimensions
     szb = size( X0, 2 ); % number of particles
     Sample = getField( HAIS_opts, 'Sample', 0 ); % act like Hamiltonian sampling code instead of AIS code
+    meta_sigma = 0.01 / sqrt(szd);
+    
     % set the default annealing trajectory to linear interolation
-    mix_frac_joint_arr = [1-(0:N-1)'/(N-1), (0:N-1)'/(N-1)];
+    if SampleMeta
+        N3 = ceil( N/3 );
+        % turn on meta parameters
+        p1 = [ones(N3,1), zeros(N3,1), 1-(0:N3-1)'/(N3-1), (0:N3-1)'/(N3-1)];
+        % interpolate between primary distributions
+        p2 = [1-(0:N3-1)'/(N3-1), (0:N3-1)'/(N3-1), zeros(N3,1), ones(N3,1) ];
+        % turn off meta parameters
+        p3 = [zeros(N3,1), ones(N3,1), (0:N3-1)'/(N3-1), 1-(0:N3-1)'/(N3-1)];
+        mix_frac_joint_arr = [p1; p2; p3];
+        
+        epsilon = randn(1,szb) * meta_sigma;
+    else
+        mix_frac_joint_arr = [1-(0:N-1)'/(N-1), (0:N-1)'/(N-1), ones( N, 1 ), zeros( N, 1 )];
+    end
     mix_frac_joint_arr = getField( HAIS_opts, 'MixFrac', mix_frac_joint_arr );
     if Sample % sample from the final distribution the entire time
-        mix_frac_joint_arr = ones( N, 1 ) * [0, 1];
+        mix_frac_joint_arr = ones( N, 1 ) * [0, 1, 1, 0];
     end
     mix_frac0_arr = mix_frac_joint_arr(:,1);
     mix_frac1_arr = mix_frac_joint_arr(:,2);
+    mix_frac_meta0_arr = mix_frac_joint_arr(:,3);
+    mix_frac_meta1_arr = mix_frac_joint_arr(:,4);
     
     % initialize X and P.  X is state, P is momentum.
     X = X0;
@@ -193,7 +211,6 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
     end    
 
     % run the dynamics forward
-    logw = 0;
     mix_frac0 = 1; % = mix_frac0_arr(1);
     mix_frac1 = 0; % = mix_frac1_arr(1);
     % number of times proposed updates were rejected, accepted, and rejected with momentum flip
@@ -210,21 +227,15 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
     E0n = E0(X, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds );
     ENn = EN(X, varargin{:});
 
+    logw = (E0n + 0.5*sum(P.^2,1) + E0_meta( epsilon ));
+    
     for n = 2:N
-        Em0 = mix_frac0*E0n + mix_frac1*ENn;
         if quasi_static == 0
             mix_frac0 = mix_frac0_arr(n);
             mix_frac1 = mix_frac1_arr(n);
-        elseif quasi_static == 1
-            % make a step with the target scale for the change in energy
-            E_mag = mean( abs(ENn - E0n) );
-            mix_frac_step = energy_step / E_mag;
-            mix_frac0 = mix_frac0 - mix_frac_step;
-            % enforce a maximum of N steps -- if falling behind, force to keep up
-            mix_frac0 = min( [mix_frac0, mix_frac0_arr(n)] );
-            mix_frac0 = max( [mix_frac0, 0] );            
-            mix_frac1 = 1 - mix_frac0;
-        elseif quasi_static == 2
+            mix_frac_meta0 = mix_frac_meta0_arr(n);
+            mix_frac_meta1 = mix_frac_meta1_arr(n);
+        else
             % ENn is the energy of the current particle locations under the final distribution, and E0n is the energy of the current particle locations under the initial distribution
             % make a step with the target scale for the change in energy
             E_mag = std(ENn - E0n);
@@ -235,33 +246,29 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
             mix_frac0 = max( [mix_frac0, 0] );            
             mix_frac1 = 1 - mix_frac0;
         end
-        Em1 = mix_frac0*E0n + mix_frac1*ENn;
-        
-        if Debug > 2
-            hist_dE(n,:) =(-Em1 + Em0);
-        end
-        % accumulate the contribution to the importance weights from this
-        % step
-        logw = logw - Em1 + Em0;
-        
+                
         if mix_frac0 == 0
             break;
         end
         
         % corrupt the momentum variable
         noise = randn( szd, szb );
+        Pold = P;
         P  = sqrt(1 - beta) * P + sqrt(beta) * noise;
         if MomentumRedraw 
             P = bsxfun( @times, P, 1 ./ sqrt(sum(P.^2, 1)) );
             P = bsxfun( @times, P, sqrt(sum(randn(size(P)).^2, 1)) );
         end
+        % update to importane weights
+        logw = logw + 0.5*sum(P.^2,1) - 0.5*sum(Pold.^2,1);
         
-        [X1, P1] = langevin( X, P );
+        [X1, P1] = langevin( X, P, epsilon );
         E0n1 = E0(X1, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds );
         ENn1 = EN(X1, varargin{:});
+        Elast = mix_frac0*E0n  + mix_frac1*ENn;
         E1 = mix_frac0*E0n1  + mix_frac1*ENn1;
         % accept or reject the langevin step for each parameter
-        delta_E = 0.5*sum(P1.^2,1) - 0.5*sum(P.^2,1) + E1  - Em1;
+        delta_E = 0.5*sum(P1.^2,1) - 0.5*sum(P.^2,1) + E1  - Elast;
         p_leap = exp( -delta_E );
         p_leap( p_leap > 1 ) = 1;
         rnd_compare = rand( 1, szb );
@@ -273,6 +280,9 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
         ENn(gd) = ENn1(gd);
         num_acc = num_acc + length(gd);
         bd = find(p_leap <= rnd_compare);
+        delta_E(bd) = 0;
+        logw = logw + delta_E;
+
         if ~isempty(bd)
             if ~ReducedFlip
                 % negate the momentum of the rejected transformations
@@ -280,7 +290,7 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
                 num_flip = num_flip + length(bd);
             else
                 % check whether or not we need to flip the momentum
-                [Xrev, Prev] = langevin( X(:,bd), -P(:,bd) );
+                [Xrev, Prev] = langevin( X(:,bd), -P(:,bd), epsilon );
                 E0nrev = E0(Xrev, varargin{:}, bounds, upper_bounds_only, lower_bounds_only, both_bounds, no_bounds );
                 ENnrev = EN(Xrev, varargin{:});
                 Erev = mix_frac0*E0nrev  + mix_frac1*ENnrev;
@@ -300,11 +310,23 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
             end
         end
         
+        if SampleMeta
+            % corrupt the meta_momentum
+            noise = randn( szd, szb );
+            Pold = P_meta;
+            P_meta  = sqrt(1 - beta) * P_meta + sqrt(beta) * noise;
+            % update to importane weights
+            logw = logw + 0.5*sum(P_meta.^2,1) - 0.5*sum(Pold.^2,1);
+        end
+        
         if Debug > 1
             fprintf('\rstep %d / %d', n, N);
         end
     end
     fprintf('\n');
+    
+    logw = logw - (ENn + 0.5*sum(P.^2,1) + E0_meta( epsilon ));
+
 
     % the estimate for logZ - adds the log partition function for the
     % initial distribution to the log importance weights
@@ -339,8 +361,36 @@ function [logZ, logweights, X, P] = HAIS( HAIS_opts, varargin )
         drawnow;    
     end
 
+    function E = EN_meta( epsilon, X )
+        if ndims( epsilon ) > 2
+            E = zeros( size( epsilon, 3 ) );
+            for ii = 1:size( epsilon, 3 )
+                E(ii) = E0_meta( squeeze(epsilon(:,:,ii)), X(:,ii) );
+            end
+            return
+        end
+        
+        %meta_sigma = meta_sigma / sqrt( size( epsilon, 1 ) );
+        [X1, P1] = langevin( X, P, epsilon );
+        
+    end
+
+    function E = E0_meta( epsilon )
+        if ndims( epsilon ) > 2
+            E = zeros( size( epsilon, 3 ) );
+            for ii = 1:size( epsilon, 3 )
+                E(ii) = E0_meta( squeeze(epsilon(:,:,ii)) );
+            end
+            return
+        end
+        
+        %meta_sigma = meta_sigma / sqrt( size( epsilon, 1 ) );
+        
+        E = sum( epsilon(:).^2 / 2 / meta_sigma^2, 1 );
+    end
+    
     % this function performs a single step of Langevin dynamics, and enforces bounds on state
-    function [X, P] = langevin( X, P )
+    function [X, P] = langevin( X, P, epsilon )
         % put the bounds in a form to be more easily used for particle
         % reflection
         lbounds_wide = bounds(:,1) * ones(1,size(X,2));
